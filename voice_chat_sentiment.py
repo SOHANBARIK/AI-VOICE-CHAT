@@ -18,6 +18,7 @@ load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN")
+BACKEND_URL = os.getenv("BACKEND_API_URL", "http://127.0.0.1:8000")
 
 if not GROQ_API_KEY or not TAVILY_API_KEY:
     st.error("Missing API Keys. Ensure GROQ_API_KEY and TAVILY_API_KEY are set in your .env file.")
@@ -40,9 +41,28 @@ if "latest_audio" not in st.session_state: st.session_state.latest_audio = None
 if "agent_executor" not in st.session_state:
     llm = ChatGroq(temperature=0.7, model_name="llama-3.3-70b-versatile", api_key=GROQ_API_KEY)
     
+    # system_prompt = """You are a highly capable voice assistant. You have access to the internet via the Tavily search tool. 
+    # Always use the search tool when asked about current events, real-time data, or things you aren't sure about.
+    # You will also be provided with the user's current 'Emotion'. You must acknowledge this emotion appropriately in your response and don't use any emoji in your response.
+    # Keep your answers concise, informative, and empathetic. Always cite your sources when using the search tool.
+    
+    # Example of using the search tool:
+    # User: "What's the weather like in New York right now? [Emotion: Frustrated]
+    # Assistant: "I understand that you're feeling frustrated. Let me check the current weather in New York for you."
+    # [Search Tool Result: "The current weather in New York is 75°F with clear skies. Source: Weather.com"]
+    # Assistant: "The current weather in New York is 75°F with clear skies. I hope that helps! (Source: Weather.com)"
+    # """
     system_prompt = """You are a highly capable voice assistant. You have access to the internet via the Tavily search tool. 
     Always use the search tool when asked about current events, real-time data, or things you aren't sure about.
-    You will also be provided with the user's current 'Emotion'. You MUST mirror or acknowledge this emotion appropriately in your response."""
+    You will also be provided with the user's current 'Emotion'. Acknowledge the emotion in your response but do not use any emoji in your response.
+    Keep your answers concise, informative, and empathetic. Always cite your sources when using the search tool.
+    
+    Example of using the search tool:
+    User: "What's the weather like in New York right now? [Emotion: Frustrated]
+    Assistant: "I understand that you're feeling frustrated. Let me check the current weather in New York for you."
+    [Search Tool Result: "The current weather in New York is 75°F with clear skies. Source: Weather.com"]
+    Assistant: "The current weather in New York is 75°F with clear skies. I hope that helps! (Source: Weather.com)"
+    """
     
     # The new standard agent implementation
     st.session_state.agent_executor = create_agent(
@@ -52,30 +72,69 @@ if "agent_executor" not in st.session_state:
     )
 
 # --- HELPER FUNCTIONS ---
-def analyze_emotion(text):
-    """Analyzes text using a Hugging Face emotion detection model via API."""
-    if not HF_TOKEN:
-        return "Neutral 😐", 0.0
+# def analyze_emotion(text):
+#     """Analyzes text using a Hugging Face emotion detection model via API."""
+#     if not HF_TOKEN:
+#         return "Missing Token ⚠️", 0.0
         
-    API_URL = "https://api-inference.huggingface.co/models/j-hartmann/emotion-english-distilroberta-base"
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+#     # Swapped to a new, active model (SamLowe's GoEmotions)
+#     API_URL = "https://router.huggingface.co/models/SamLowe/roberta-base-go_emotions"
+#     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+    
+#     try:
+#         response = requests.post(API_URL, headers=headers, json={"inputs": text}, timeout=15)
+        
+#         if response.status_code == 200:
+#             results = response.json()
+#             top_emotion = results[0][0]['label']
+#             score = results[0][0]['score']
+            
+#             # Expanded emoji map for the new model's 28 emotions
+#             emoji_map = {
+#                 "anger": "😠", "annoyance": "😠", "disapproval": "👎",
+#                 "disgust": "🤢", 
+#                 "fear": "😨", "nervousness": "😬",
+#                 "joy": "😊", "amusement": "😂", "approval": "👍", "excitement": "🤩", "gratitude": "🙏", "love": "❤️", "optimism": "🌟", "relief": "😌", "admiration": "🤩",
+#                 "neutral": "😐",
+#                 "sadness": "😔", "disappointment": "😞", "grief": "😢", "remorse": "😔",
+#                 "surprise": "😲", "confusion": "😕", "curiosity": "🤔", "realization": "💡",
+#                 "caring": "🤗", "desire": "😍", "embarrassment": "😳"
+#             }
+            
+#             # .get() will default to "✨" if an emotion isn't mapped
+#             return f"{top_emotion.capitalize()} {emoji_map.get(top_emotion, '✨')}", score
+            
+#         elif response.status_code == 503:
+#             return "Model Warming Up ⏳", 0.0
+#         elif response.status_code == 401:
+#             return "Invalid HF Token ❌", 0.0
+#         else:
+#             return f"API Error {response.status_code} ⚠️", 0.0 
+            
+#     except Exception as e:
+#         return "Network Timeout 🔌", 0.0
+
+def analyze_emotion(text):
+    """Asks our custom local FastAPI server for the emotion."""
+    API_URL = "http://127.0.0.1:8000/analyze"
     
     try:
-        response = requests.post(API_URL, headers=headers, json={"inputs": text}, timeout=5)
+        # Firing a request to our local server
+        response = requests.post(API_URL, json={"text": text}, timeout=10)
+        
         if response.status_code == 200:
-            results = response.json()
-            top_emotion = results[0][0]['label']
-            score = results[0][0]['score']
-            
-            emoji_map = {
-                "anger": "😠", "disgust": "🤢", "fear": "😨", 
-                "joy": "😊", "neutral": "😐", "sadness": "😔", "surprise": "😲"
-            }
-            return f"{top_emotion.capitalize()} {emoji_map.get(top_emotion, '')}", score
+            data = response.json()
+            return data["emotion"], data["confidence"]
         else:
+            print(f"API Error: {response.text}")
             return "Neutral 😐", 0.0 
-    except Exception:
-        return "Neutral 😐", 0.0 
+            
+    except requests.exceptions.ConnectionError:
+        print("FastAPI server is not running!")
+        return "Offline 🔌", 0.0
+    except Exception as e:
+        print(f"General Error: {e}")
+        return "Neutral 😐", 0.0
 
 def generate_tts_audio(text):
     """Generates a voice using edge-tts."""
@@ -91,7 +150,7 @@ def generate_tts_audio(text):
     return asyncio.run(_generate())
 
 # --- MAIN UI ---
-st.title("🎙️ Emotion-Aware Voice Assistant")
+st.title("🎙️ Emotion-Aware AI Voice Assistant")
 st.markdown("Equipped with **Sliding Window Memory**, **Real-Time Web Search**, and **Advanced Emotion Detection**.")
 
 # Display Chat History
