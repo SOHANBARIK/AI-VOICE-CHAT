@@ -8,6 +8,10 @@ langchain
 langchain-groq
 langchain-tavily
 langgraph
+<<<<<<< HEAD
+huggingface_hub
+=======
+>>>>>>> 091539b522cd2d54369cb96175c64606c62df2b0
 
 # --- Backend (FastAPI Local Model) ---
 fastapi
