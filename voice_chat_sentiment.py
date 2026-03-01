@@ -347,7 +347,11 @@ if "agent_executor" not in st.session_state:
     You will also be provided with the user's current 'Emotion'. Acknowledge the emotion in your response but do not use any emoji in your response.
     Keep your answers concise, informative, and empathetic. Always cite your sources when using the search tool.
     
-    CRITICAL: Reply entirely in casual "Hinglish" (a natural mix of Hindi and English, written in the English alphabet).
+    Example of using the search tool:
+    User: "What's the weather like in New York right now? [Emotion: Frustrated]
+    Assistant: "I understand that you're feeling frustrated. Let me check the current weather in New York for you."
+    [Search Tool Result: "The current weather in New York is 75°F with clear skies. Source: Weather.com"]
+    Assistant: "The current weather in New York is 75°F with clear skies. I hope that helps! (Source: Weather.com)"
     """
     
     st.session_state.agent_executor = create_agent(llm, tools, system_prompt=system_prompt)
