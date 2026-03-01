@@ -342,6 +342,15 @@ if "latest_audio" not in st.session_state: st.session_state.latest_audio = None
 # Initialize the NEW LangChain v1.0 Agent
 if "agent_executor" not in st.session_state:
     llm = ChatGroq(temperature=0.7, model_name="llama-3.3-70b-versatile", api_key=GROQ_API_KEY)
+    system_prompt = """You are a highly capable voice assistant. You have access to the internet via the Tavily search tool. 
+    Always use the search tool when asked about current events, real-time data, or things you aren't sure about.
+    You will also be provided with the user's current 'Emotion'. Acknowledge the emotion in your response but do not use any emoji in your response.
+    Keep your answers concise, informative, and empathetic. Always cite your sources when using the search tool.
+    
+    CRITICAL: Reply entirely in casual "Hinglish" (a natural mix of Hindi and English, written in the English alphabet).
+    """
+    
+    st.session_state.agent_executor = create_agent(llm, tools, state_modifier=system_prompt)
 
 def analyze_emotion(text):
     """Analyzes text using the official Hugging Face Python Client."""
