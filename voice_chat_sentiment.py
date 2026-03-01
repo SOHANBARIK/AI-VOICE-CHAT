@@ -350,7 +350,7 @@ if "agent_executor" not in st.session_state:
     CRITICAL: Reply entirely in casual "Hinglish" (a natural mix of Hindi and English, written in the English alphabet).
     """
     
-    st.session_state.agent_executor = create_agent(llm, tools, state_modifier=system_prompt)
+    st.session_state.agent_executor = create_agent(llm, tools, system_prompt=system_prompt)
 
 def analyze_emotion(text):
     """Analyzes text using the official Hugging Face Python Client."""
