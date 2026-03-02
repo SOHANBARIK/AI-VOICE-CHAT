@@ -110,7 +110,7 @@ def analyze_emotion(text):
 
 def generate_tts_audio(text):
     """Generates a voice using edge-tts."""
-    voice = "en-IN-NeerjaExpressiveNeural"
+    voice = "hi-IN-SwararaNeural"  # Hindi voice
     async def _generate():
         communicate = edge_tts.Communicate(text, voice)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
