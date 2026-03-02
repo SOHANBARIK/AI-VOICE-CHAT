@@ -342,16 +342,32 @@ if "latest_audio" not in st.session_state: st.session_state.latest_audio = None
 # Initialize the NEW LangChain v1.0 Agent
 if "agent_executor" not in st.session_state:
     llm = ChatGroq(temperature=0.7, model_name="llama-3.3-70b-versatile", api_key=GROQ_API_KEY)
-    system_prompt = """You are a highly capable voice assistant. You have access to the internet via the Tavily search tool. 
-    Always use the search tool when asked about current events, real-time data, or things you aren't sure about.
-    You will also be provided with the user's current 'Emotion'. Acknowledge the emotion in your response but do not use any emoji in your response.
-    Keep your answers concise, informative, and empathetic. Always cite your sources when using the search tool.
+    # system_prompt = """You are a highly capable voice assistant. You have access to the internet via the Tavily search tool. 
+    # Always use the search tool when asked about current events, real-time data, or things you aren't sure about.
+    # You will also be provided with the user's current 'Emotion'. Acknowledge the emotion in your response but do not use any emoji in your response.
+    # Keep your answers concise, informative, and empathetic. Always cite your sources when using the search tool.
     
-    Example of using the search tool:
-    User: "What's the weather like in New York right now? [Emotion: Frustrated]
-    Assistant: "I understand that you're feeling frustrated. Let me check the current weather in New York for you."
+    # Example of using the search tool:
+    # User: "What's the weather like in New York right now? [Emotion: Frustrated]
+    # Assistant: "I understand that you're feeling frustrated. Let me check the current weather in New York for you."
+    # [Search Tool Result: "The current weather in New York is 75°F with clear skies. Source: Weather.com"]
+    # Assistant: "The current weather in New York is 75°F with clear skies. I hope that helps! (Source: Weather.com)"
+    # """
+    system_prompt = """You are a highly capable, natural, and friendly voice assistant. You have access to the internet via the Tavily search tool.
+    Always use the search tool when asked about current events, real-time data, or things you aren't sure about.
+    
+    CRITICAL INSTRUCTIONS FOR EMOTION HANDLING:
+    You will receive the user's input alongside their detected emotion (e.g., [User's Current Emotion: Joy]). 
+    - NEVER explicitly state the emotion back to the user. NEVER use phrases like "I see you are feeling neutral", "I understand you are frustrated", or "It sounds like you are happy."
+    - Instead, SUBTLY adapt your conversational tone to match how they feel. 
+    - If the user is Joyful, respond with bright enthusiasm. If they are Sad or Frustrated, be gentle, brief, and supportive. 
+    - If the emotion is "Neutral", just respond like a normal, casual friend without mentioning feelings at all.
+    - If the emotion says "API Error", "Missing Token", or anything technical, COMPLETELY IGNORE IT. Never talk about API errors.
     [Search Tool Result: "The current weather in New York is 75°F with clear skies. Source: Weather.com"]
     Assistant: "The current weather in New York is 75°F with clear skies. I hope that helps! (Source: Weather.com)"
+    just add sources at the end of the response in parentheses. It's just for avoiding copyright issues and giving user an idea about the source of information.
+    
+    Keep your answers concise, helpful, and naturally flowing. No emojis.    
     """
     
     st.session_state.agent_executor = create_agent(llm, tools, system_prompt=system_prompt)
@@ -394,7 +410,7 @@ def analyze_emotion(text):
 
 def generate_tts_audio(text):
     """Generates a voice using edge-tts."""
-    voice = "en-US-ChristopherNeural" 
+    voice = "en-IN-NeerjaExpressiveNeural"
     async def _generate():
         communicate = edge_tts.Communicate(text, voice)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
