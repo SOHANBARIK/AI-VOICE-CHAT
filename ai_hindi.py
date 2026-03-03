@@ -59,6 +59,7 @@ if "agent_executor" not in st.session_state:
     - If you need to search the web, you MUST use the provided tool silently via the official backend function. 
     - NEVER type out raw tool calls in your response text (e.g., NEVER output <function=tavily_search>).
     - NEVER narrate that you are going to search (e.g., Do not say "Let me check the internet" or "I am getting the information"). Just execute the search silently and provide the final answer.
+    - Go for tavily search only when you don't know the answer or when the user is asking for real-time information. For general questions, rely on your training data and do not use the search tool.
     
     CRITICAL INSTRUCTIONS FOR EMOTION HANDLING:
     You will receive the user's input alongside their detected emotion.
