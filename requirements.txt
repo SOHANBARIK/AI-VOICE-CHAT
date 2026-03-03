@@ -10,3 +10,4 @@ langgraph
 huggingface-hub
 SpeechRecognition 
 pydub
+gTTS

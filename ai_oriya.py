@@ -1,18 +1,18 @@
 import streamlit as st
 import tempfile
 import os
-import asyncio
+from io import BytesIO
 import requests
 from dotenv import load_dotenv
 from groq import Groq
-import edge_tts
 from huggingface_hub import InferenceClient
+from gtts import gTTS  # 1. Swapped to Google TTS for native Odia support
 
-# Modern LangChain 1.0 Imports
+# Modern LangChain & LangGraph Imports
 from langchain_groq import ChatGroq
 from langchain_tavily import TavilySearch
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain.agents import create_agent
+from langchain.agents import create_agent  # 2. Restored proper LangChain agent
 
 # --- CONFIGURATION ---
 load_dotenv()
@@ -32,28 +32,35 @@ search_tool = TavilySearch(max_results=3)
 tools = [search_tool]
 
 # Initialize LLM globally so we can use it for quick background translations too
-llm = ChatGroq(temperature=0.7, model_name="llama-3.3-70b-versatile", api_key=GROQ_API_KEY)
+# Temperature is 0 for strict tool execution without XML leakage
+llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile", api_key=GROQ_API_KEY)
 
 # --- SESSION STATE ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "latest_audio" not in st.session_state: st.session_state.latest_audio = None
 
-# Initialize the LangChain Agent
+# Initialize the LangGraph Agent
 if "agent_executor" not in st.session_state:
     # UPDATED BRAIN: Instructed to speak Odia respectfully
-    system_prompt = """You are a highly capable, respectful, and friendly voice assistant. You converse natively in the Odia (Oriya) language.
-    You have access to the internet via the Tavily search tool. Always use it for current events or real-time data.
+    system_prompt = """You are a highly capable, natural voice assistant. You have access to the internet via the Tavily search tool.
     
-    CRITICAL INSTRUCTIONS:
-    1. LANGUAGE: You MUST reply entirely in Odia (using the Odia script). Keep your tone warm, highly respectful, and natural, like speaking to an elderly grandfather. Keep sentences simple and easy to understand.
-    2. EMOTIONS: You will receive the user's detected emotion (e.g., [User's Current Emotion: Joy]). 
-       - NEVER state the emotion out loud.
-       - Instead, SUBTLY match their energy. If they are happy, be enthusiastic. If they are sad, be gentle and comforting. If "Neutral", just be normal.
-       - IGNORE technical errors like "API Error" or "Missing Token" if they appear in the emotion tag.
-    3. SOURCES: If you use the search tool, briefly mention the source at the end in parentheses.
-    4. NO EMOJIS: Do not use emojis in your response, as the TTS engine cannot read them.
+    CRITICAL TOOL USE INSTRUCTIONS:
+    - If you need to search the web, you MUST use the provided tool silently via the official backend function. 
+    - NEVER type out raw tool calls in your response text (e.g., NEVER output <function=tavily_search>).
+    - NEVER narrate that you are going to search (e.g., Do not say "Let me check the internet" or "I am getting the information"). Just execute the search silently and provide the final answer.
+    - LANGUAGE: You MUST reply entirely in Odia (using the Odia script). Keep your tone warm, highly respectful, and natural, like speaking to an elderly grandfather. Keep sentences simple and easy to understand.
+    
+    CRITICAL INSTRUCTIONS FOR EMOTION HANDLING:
+    You will receive the user's input alongside their detected emotion.
+    - NEVER explicitly state the emotion back to the user (e.g., NEVER say "I see you are feeling neutral").
+    - Instead, SUBTLY adapt your tone to match how they feel. 
+    - If the emotion says "API Error", "Missing Token", or anything technical, COMPLETELY IGNORE IT.
+    
+    Keep your answers concise, helpful, and natural. No emojis.
+    Reply entirely in Odia as per the system prompt.
     """
     
+    # 3. Using create_react_agent to properly handle the Tavily search
     st.session_state.agent_executor = create_agent(llm, tools, system_prompt=system_prompt)
 
 def analyze_emotion(text):
@@ -86,28 +93,29 @@ def analyze_emotion(text):
         return "API Error ⚠️", 0.0
 
 def generate_tts_audio(text):
-    """Generates a voice using edge-tts with safety checks."""
+    """Generates a voice using Google TTS entirely in RAM (Cloud Safe)."""
     if not text or text.strip() == "":
         return None
         
-    # UPDATED VOICE: Official Microsoft Odia Female Voice
-    # (If you prefer a male voice, change this to: "or-IN-SukantNeural")
-    voice = "or-IN-SubhasiniNeural" 
-    
-    async def _generate():
-        try:
-            communicate = edge_tts.Communicate(text, voice)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
-                await communicate.save(tmp_file.name)
-                with open(tmp_file.name, "rb") as f:
-                    audio_bytes = f.read()
-            os.remove(tmp_file.name)
-            return audio_bytes
-        except Exception as e:
-            print(f"TTS Error: {e}")
-            return None
-            
-    return asyncio.run(_generate())
+    try:
+        # 'or' is the official Google Translate code for Odia
+        tts = gTTS(text=text, lang='or', slow=False)
+        
+        # Create a temporary space in the server's RAM
+        audio_stream = BytesIO()
+        
+        # Write the audio directly to RAM instead of the hard drive
+        tts.write_to_fp(audio_stream)
+        
+        # Reset the stream's position to the beginning so Streamlit can read it
+        audio_stream.seek(0)
+        
+        return audio_stream.read()
+        
+    except Exception as e:
+        # Show the exact error on the screen if gTTS fails again!
+        st.error(f"Google TTS Error: {e}")
+        return None
 
 # --- MAIN UI ---
 st.title("🎙️ Emotion-Aware AI Voice Assistant")
@@ -136,10 +144,8 @@ if audio_value:
                 tmp_audio_path = tmp_audio.name
             
             with open(tmp_audio_path, "rb") as file:
-                # FIX: Removed language="or" so Whisper auto-detects Odia naturally
                 transcription = groq_client.audio.transcriptions.create(
-                  file=(tmp_audio_path, file.read()), model="whisper-large-v3"
-                )
+                  file=(tmp_audio_path, file.read()), model="whisper-large-v3")
             user_text = transcription.text.strip()
             os.remove(tmp_audio_path)
 
